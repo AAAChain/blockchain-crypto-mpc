@@ -128,10 +128,31 @@ def run_sign(inShare, cryptoType):
     with obj:
         obj.initSign(inData)
         exec_mpc_exchange(obj)
-        sig = obj.getSignResult()
-    print("ok")
+        sig = bytes(obj.getSignResult().hex(), 'utf-8')
+    print("ok", sig)
     return sig
 
+def run_getPublic(inShare, cryptoType):
+    print(cryptoType + " getPublic...")
+    if not args.data_file:
+        sys.exit("Input data missing")
+    with open(args.data_file, "rb") as f:
+        inData = f.read()
+
+    if cryptoType == 'ECDSA':
+        if len(inData) > 32:
+            sys.exit("Input too long. Data should be hashed before ECDSA signing.")
+        obj = mpc_crypto.Ecdsa(peer, inShare)
+    elif cryptoType == 'EDDSA':
+        obj = mpc_crypto.Eddsa(peer, inShare)
+    else:
+        sys.exit("Sign not supported for " + cryptoType)
+
+    with obj:
+        # sig = bytes(mpc_crypto.serializePubBIP32(obj.share), 'utf-8')
+        sig = bytes(obj.getPublic().hex(), 'utf-8')
+    print("ok", sig)
+    return sig
 
 def run_import(inShare, cryptoType='generic'):
     print("Importing key...")
@@ -178,6 +199,9 @@ def run_command(params):
     elif params.command == 'sign':
         out = run_sign(inStr, params.type)
         outFileDefault = params.type + '_signature'
+    elif params.command == 'getPublic':
+        out = run_getPublic(inStr, params.type)
+        outFileDefault = params.type + '_pubkey'
     outputFile = args.out_file if args.out_file else outFileDefault + \
         '_' + str(peer) + '.dat'
     return out, outputFile
@@ -233,7 +257,7 @@ def run_client():
     clientsocket.close()
 
 
-commands = ['generate', 'import', 'sign', 'derive']
+commands = ['generate', 'import', 'sign', 'derive', 'getPublic']
 types = ['EDDSA', 'ECDSA', 'BIP32', 'generic']
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  conflict_handler='resolve',

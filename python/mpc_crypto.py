@@ -6,7 +6,7 @@ from ctypes import *
 import sys
 
 dll_name = 'mpc_crypto'
-if 'win' not in sys.platform:
+if 'windows' not in sys.platform:
     dll_name = 'lib' + dll_name + '.so'
 libmpc = CDLL(dll_name)
 

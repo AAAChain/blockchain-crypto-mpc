@@ -1,0 +1,9 @@
+/src/*/*.o
+/src/*.o
+/bench/*.o
+/src/utils/*.gch
+/*.so
+/python/*.dat
+/python/*.bin
+/python/*.pyc
+/*_bench

@@ -31,12 +31,8 @@ COMMON_CPPFLAGS = \
 	-Wno-unused \
 	-Wno-switch \
 	-Wno-switch-enum \
-	-Werror \
 	-mpclmul \
 	-std=c++0x
-
-COMMON_LDFLAGS = \
-	-s
 
 #---------------- LIB -------------------
 	
@@ -59,8 +55,8 @@ LIB_HEADERS = $(wildcard src/*.h) \
 	
 LIB_INCLUDES = \
 	$(COMMON_INCLUDES) \
-	-I ${JAVA_HOME}/include \
-	-I ${JAVA_HOME}/include/linux \
+	-I "${JAVA_HOME}/include" \
+	-I "${JAVA_HOME}/include/darwin" \
 	-I src/utils \
 	-I src/crypto_utils \
 	-I src/mpc_protocols
@@ -70,16 +66,17 @@ LIB_CPPFLAGS = \
 	$(COMMON_CPPFLAGS) \
 	-DMPC_CRYPTO_EXPORTS \
 	-fvisibility=hidden \
-	-maes
+	-maes \
+	-I/usr/local/opt/openssl/include
 
 LIB_LDFLAGS = \
 	$(COMMON_LDFLAGS) \
-	-Wl,-z,defs \
 	-Wl,-rpath,\'\$$ORIGIN\' \
 	-shared \
 	-rdynamic \
 	-lcrypto \
-	-lpthread
+	-lpthread \
+	-L/usr/local/opt/openssl/lib
 
 .s.o: 
 	$(CXX) -o $@ -c $<
