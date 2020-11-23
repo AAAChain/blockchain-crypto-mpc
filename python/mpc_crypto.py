@@ -8,7 +8,7 @@ import sys
 dll_name = 'mpc_crypto'
 if 'windows' not in sys.platform:
     dll_name = 'lib' + dll_name + '.so'
-libmpc = CDLL(dll_name)
+libmpc = CDLL('/Users/naiba/Downloads/blockchain-crypto-mpc/' + dll_name)
 
 KEY_TYPE_EDDSA = 2
 KEY_TYPE_ECDSA = 3

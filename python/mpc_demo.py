@@ -132,8 +132,9 @@ def run_sign(inShare, cryptoType):
     print("ok", sig)
     return sig
 
-def run_getPublic(inShare, cryptoType):
-    print(cryptoType + " getPublic...")
+
+def run_get_public(inShare, cryptoType):
+    print(cryptoType + " get_public...")
     if not args.data_file:
         sys.exit("Input data missing")
     with open(args.data_file, "rb") as f:
@@ -150,9 +151,29 @@ def run_getPublic(inShare, cryptoType):
 
     with obj:
         # sig = bytes(mpc_crypto.serializePubBIP32(obj.share), 'utf-8')
-        sig = bytes(obj.getPublic().hex(), 'utf-8')
+        sig = bytes(obj.get_public().hex(), 'utf-8')
     print("ok", sig)
     return sig
+
+
+def gen_rsa_test_key():
+    backup_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+    rsa_prv_der = backup_key.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    backup_pub_key = backup_key.public_key()
+    rsa_pub_der = backup_pub_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    return rsa_prv_der, rsa_pub_der
+
 
 def run_import(inShare, cryptoType='generic'):
     print("Importing key...")
@@ -199,8 +220,8 @@ def run_command(params):
     elif params.command == 'sign':
         out = run_sign(inStr, params.type)
         outFileDefault = params.type + '_signature'
-    elif params.command == 'getPublic':
-        out = run_getPublic(inStr, params.type)
+    elif params.command == 'get_public':
+        out = run_get_public(inStr, params.type)
         outFileDefault = params.type + '_pubkey'
     outputFile = args.out_file if args.out_file else outFileDefault + \
         '_' + str(peer) + '.dat'
@@ -257,7 +278,7 @@ def run_client():
     clientsocket.close()
 
 
-commands = ['generate', 'import', 'sign', 'derive', 'getPublic']
+commands = ['generate', 'import', 'sign', 'derive', 'get_public']
 types = ['EDDSA', 'ECDSA', 'BIP32', 'generic']
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  conflict_handler='resolve',

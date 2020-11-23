@@ -1,7 +1,10 @@
 import sys
 import os
 import binascii
+import hashlib
 
+from ecdsa import SECP256k1, SigningKey, VerifyingKey
+from ecdsa.util import randrange_from_seed__trytryagain
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
@@ -16,6 +19,7 @@ def perform_step(obj, inMsgBuf):
     inMsg = mpc_crypto.messageFromBuf(inMsgBuf)
 
     outMsg, flags = mpc_crypto.step(obj.ctx, inMsg)
+    print('inMsg', inMsg, 'outMsg', outMsg)
     mpc_crypto.freeMessage(inMsg)
 
     finished = flags & mpc_crypto.PROTOCOL_FINISHED_FLAG
@@ -96,7 +100,8 @@ def ecdsa_gen():
     clientObj.initGenerate()
     serverObj.initGenerate()
     exec_client_server(clientObj, serverObj)
-    print(" ok")
+    print("publicKey", clientObj.getPublic().hex(), serverObj.getPublic().hex())
+    print("ok")
     return clientObj, serverObj
 
 
@@ -108,6 +113,30 @@ def ecdsa_sign(clientObj, serverObj):
     exec_client_server(clientObj, serverObj)
     sig = clientObj.getSignResult()
     clientObj.verify(test_data, sig)
+    print("ok")
+
+
+def ecdsa_sign_test_data(clientObj, serverObj, test_data):
+    print("test_ecdsa_sign_test_data...")
+    clientObj.initSign(test_data, True)
+    serverObj.initSign(test_data, True)
+    exec_client_server(clientObj, serverObj)
+    sig = clientObj.getSignResult()
+    clientObj.verify(test_data, sig)
+    f = open("sign.raw", "wb")
+    f.write(sig)
+    f.close()
+    print("ok")
+
+
+def ecdsa_sign2(clientObj, serverObj, clientObj2):
+    print("test_ecdsa_sign2...")
+    test_data = b"123456"
+    clientObj.initSign(test_data, True)
+    serverObj.initSign(test_data, True)
+    exec_client_server(clientObj, serverObj)
+    sig = clientObj.getSignResult()
+    clientObj2.verify(test_data, sig)
     print("ok")
 
 
@@ -129,6 +158,7 @@ def bip_derive(srcClient, srcServer, hardened, index, test):
     serverObj.getDeriveResult()
 
     assert clientObj.serialize() == test
+    print('bip_derive', test)
     return clientObj, serverObj
 
 
@@ -191,11 +221,12 @@ def ecdsa_backup(clientObj, serverObj):
     serverObj.initBackup(rsa_pub_der)
     exec_client_server(clientObj, serverObj)
     backup = clientObj.getBackupResult()
-
     pub_ecdsa_key = clientObj.getPublic()
     mpc_crypto.verifyEcdsaBackupKey(rsa_pub_der, pub_ecdsa_key, backup)
     prv_ecdsa_key = mpc_crypto.restoreEcdsaKey(
         rsa_prv_der, pub_ecdsa_key, backup)
+    SigningKey.from_der(prv_ecdsa_key, SECP256k1)
+    print('prvKey', prv_ecdsa_key.hex()[66:130])
 
 
 def test_eddsa():
@@ -205,11 +236,73 @@ def test_eddsa():
     eddsa_backup(eddsaKeyClient, eddsaKeyServer)
 
 
+def getMd5FromHex(data):
+    m = hashlib.md5()
+    m.update(data.hex().encode('utf-8'))
+    return m.digest().hex()
+
+
 def test_ecdsa():
+    # 建立秘密共享
     ecdsaKeyClient, ecdsaKeyServer = ecdsa_gen()
-    refresh_shares(ecdsaKeyClient, ecdsaKeyServer)
-    ecdsa_sign(ecdsaKeyClient, ecdsaKeyServer)
+    oldClientShare = ecdsaKeyClient.exportShare()
+    oldServerShare = ecdsaKeyServer.exportShare()
     ecdsa_backup(ecdsaKeyClient, ecdsaKeyServer)
+    # 刷新秘密
+    print("before refresh", getMd5FromHex(ecdsaKeyClient.exportShare()),
+          getMd5FromHex(ecdsaKeyServer.exportShare()))
+    refresh_shares(ecdsaKeyClient, ecdsaKeyServer)
+    print("after refresh", getMd5FromHex(ecdsaKeyClient.exportShare()),
+          getMd5FromHex(ecdsaKeyServer.exportShare()))
+    ecdsa_backup(ecdsaKeyClient, ecdsaKeyServer)
+    return
+    # 重建两方
+    testClient = mpc_crypto.Ecdsa(CLIENT)
+    testClient.setShare(ecdsaKeyClient.share)
+    testServer = mpc_crypto.Ecdsa(SERVER)
+    testServer.setShare(ecdsaKeyServer.share)
+    # 签名
+    ecdsa_sign(testClient, testServer)
+    # 旧分享密钥签名测试
+    oldClient = mpc_crypto.Ecdsa(CLIENT)
+    oldClient.importShare(oldClientShare)
+    oldServer = mpc_crypto.Ecdsa(SERVER)
+    oldServer.importShare(oldServerShare)
+    print('oldShare', getMd5FromHex(oldClientShare),
+          getMd5FromHex(oldServerShare))
+    # 签名
+    ecdsa_sign2(oldClient, oldServer, testClient)
+    ecdsa_sign2(testClient, testServer, oldClient)
+    # ecdsa_sign2(testClient, oldServer, oldClient)
+    # 备份
+    ecdsa_backup(testClient, testServer)
+
+
+def test_ethereum():
+    # 建立秘密共享
+    # ecdsaKeyClient, ecdsaKeyServer = ecdsa_gen()
+    # f = open("kc.dat", "wb")
+    # f.write(ecdsaKeyClient.exportShare())
+    # f.close()
+    # f = open("ks.dat", "wb")
+    # f.write(ecdsaKeyServer.exportShare())
+    # f.close()
+    # f = open("pubkey.dat", "wb")
+    # f.write(ecdsaKeyClient.getPublic())
+    # f.close()
+    # ecdsa_backup(ecdsaKeyClient, ecdsaKeyServer)
+    # return
+    # 读取已建立的秘密共享
+    f = open("kc.dat", "rb")
+    ecdsaKeyClient = mpc_crypto.Ecdsa(CLIENT, f.read())
+    f.close()
+    f = open("ks.dat", "rb")
+    ecdsaKeyServer = mpc_crypto.Ecdsa(SERVER, f.read())
+    f.close()
+    ecdsa_backup(ecdsaKeyClient, ecdsaKeyServer)
+    f = open("tx.raw", "rb")
+    ecdsa_sign_test_data(ecdsaKeyClient, ecdsaKeyServer, f.read())
+    f.close()
 
 
 def test_generic_secret():
@@ -219,10 +312,11 @@ def test_generic_secret():
 
 if __name__ == "__main__":
     try:
-        test_eddsa()
-        test_bip()
-        test_ecdsa()
-        test_generic_secret()
+        # test_eddsa()
+        # test_bip()
+        # test_ecdsa()
+        # test_generic_secret()
+        test_ethereum()
     except mpc_crypto.MPCException as e:
         sys.exit("MPC Error - " + hex(e.error_code))
     print('OOTest Unbound OSS crypto MPC - OK')
